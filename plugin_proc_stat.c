@@ -365,7 +365,7 @@ static void my_disk(RESULT * result, RESULT * arg1, RESULT * arg2, RESULT * arg3
 
 #ifndef __MAC_OS_X_VERSION_10_3
 /* function similar to proc_stat::cpu that allows to access any particular cpu 
- * syntax: proc_stat::core(coreNo, key, delay)
+ * syntax: proc_stat::core(core, key, delay)
  * Keys are the same, just like in proc_stat::cpu
  */
 static void my_core(RESULT * result, RESULT * arg1, RESULT * arg2, RESULT * arg3)
@@ -388,7 +388,8 @@ static void my_core(RESULT * result, RESULT * arg1, RESULT * arg2, RESULT * arg3
     char *keys[] = { "user", "nice", "system", "idle", "iow", "irq", "sirq" };
     char *user_keys[] = {"user", "nice", "system", "idle", "iowait", "irq", "softirq" };	
     char key_buffer[32];
-    double req_value = -1.0;
+    double req_value;
+    int key_found = 0;
 
     double cpu_idle = 0.0;
     double cpu_total = 0.0;
@@ -399,15 +400,18 @@ static void my_core(RESULT * result, RESULT * arg1, RESULT * arg2, RESULT * arg3
         qprintf(key_buffer, sizeof(key_buffer), "cpu%u.%s", core, keys[i]);
         double value = hash_get_delta(&Stat, key_buffer, NULL, delay);
         cpu_total += value;			// calculate cpu total time
-        if(strcasecmp(key, user_keys[i]) == 0)
+        if(!key_found && (strcasecmp(key, user_keys[i]) == 0))
+        {
             req_value = value;		// grab value if it matches the requested key
+            key_found = 1;			// and set flag
+        }
         if(strcasecmp(keys[i], "idle") == 0)
             cpu_idle = value;		// grab cpu idle time anyway
     }
-    /* If req_value hasn't changed during loop above, it means that requested key wasn't found.
-     * Maybe user wants "busy", which requires extra step (below), or maybe it's just
-     * gibberish (in which case return 0). */
-    if ((req_value == -1.0) && (strcasecmp(key, "busy") == 0))
+    /* If key wasn't found and flag wasn't set, then maybe
+     * user wants "busy", which requires extra step (below),
+     * or maybe it's just gibberish (in which case return 0). */
+    if (!key_found && (strcasecmp(key, "busy") == 0))
         req_value = cpu_total - cpu_idle;
     else
         req_value = 0.0;
